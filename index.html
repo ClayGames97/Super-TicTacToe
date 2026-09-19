@@ -161,6 +161,121 @@
   .reset-btn:hover { border-color: var(--muted); background: var(--active-soft); }
   .reset-btn:focus-visible { outline: 2px solid var(--active); outline-offset: 2px; }
 
+  .mode-row {
+    display: flex;
+    gap: 6px;
+    padding: 4px;
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+    border-radius: 10px;
+    margin-bottom: 14px;
+  }
+
+  .mode-btn {
+    flex: 1;
+    font-family: 'Work Sans', sans-serif;
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--muted);
+    background: transparent;
+    border: none;
+    border-radius: 7px;
+    padding: 9px 10px;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .mode-btn.active {
+    background: var(--active-soft);
+    color: var(--ink);
+  }
+  .mode-btn:focus-visible { outline: 2px solid var(--active); outline-offset: 2px; }
+
+  .online-panel {
+    width: 100%;
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 14px;
+  }
+
+  .online-setup {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: stretch;
+  }
+
+  .join-row {
+    display: flex;
+    gap: 8px;
+  }
+
+  .code-input {
+    flex: 1;
+    min-width: 0;
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 17px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink);
+    background: var(--bg);
+    border: 1px solid var(--panel-edge);
+    border-radius: 7px;
+    padding: 9px 12px;
+    text-align: center;
+  }
+  .code-input:focus-visible { outline: 2px solid var(--active); outline-offset: 1px; }
+
+  .panel-btn {
+    font-family: 'Work Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--panel);
+    background: var(--ink);
+    border: 1px solid var(--ink);
+    border-radius: 7px;
+    padding: 10px 14px;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
+  }
+  .panel-btn:hover { opacity: 0.85; }
+  .panel-btn:focus-visible { outline: 2px solid var(--active); outline-offset: 2px; }
+  .panel-btn.ghost {
+    color: var(--ink);
+    background: transparent;
+    border-color: var(--panel-edge);
+  }
+
+  .online-error {
+    font-size: 12.5px;
+    color: var(--o-color);
+    margin: 0;
+  }
+
+  .online-status {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    text-align: center;
+  }
+
+  .room-code-display {
+    font-family: 'Fraunces', serif;
+    font-weight: 700;
+    font-size: 30px;
+    letter-spacing: 0.16em;
+    color: var(--ink);
+  }
+
+  .online-status-text {
+    font-size: 13.5px;
+    color: var(--muted);
+    margin: 0;
+  }
+
   .meta-board {
     --gap-outer: 8px;
     --gap-inner: 3px;
@@ -321,6 +436,27 @@
     <h1>Super Tic-Tac-Toe</h1>
     <p class="tagline">Win three small boards in a row to take the big board. Your move sends your opponent to the matching small board next.</p>
 
+    <div class="mode-row">
+      <button class="mode-btn active" id="modeLocalBtn" type="button">This device</button>
+      <button class="mode-btn" id="modeOnlineBtn" type="button">Play online</button>
+    </div>
+
+    <div class="online-panel" id="onlinePanel" hidden>
+      <div class="online-setup" id="onlineSetup">
+        <button class="panel-btn" id="createRoomBtn" type="button">Create a room</button>
+        <div class="join-row">
+          <input class="code-input" id="joinCodeInput" maxlength="5" placeholder="CODE" autocapitalize="characters" autocomplete="off" spellcheck="false" inputmode="text">
+          <button class="panel-btn" id="joinRoomBtn" type="button">Join</button>
+        </div>
+        <p class="online-error" id="onlineError" hidden></p>
+      </div>
+      <div class="online-status" id="onlineStatusPanel" hidden>
+        <div class="room-code-display" id="roomCodeDisplay"></div>
+        <p class="online-status-text" id="onlineStatusText"></p>
+        <button class="panel-btn ghost" id="leaveRoomBtn" type="button">Leave room</button>
+      </div>
+    </div>
+
     <div class="status-bar">
       <div class="status" id="status"></div>
       <button class="reset-btn" id="resetBtn">New game</button>
@@ -333,9 +469,154 @@
     <p class="legend">A small board stays open until all nine boxes are filled — that's just a visual cue, not a requirement. The instant you complete a three-in-a-row in a board, it counts toward your big-board win, even if your opponent later lines up in that same board too.</p>
   </div>
 
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
 <script>
 (function () {
   "use strict";
+
+  // --- Online play (Firebase Realtime Database) ---------------------------
+  const firebaseConfig = {
+    apiKey: "AIzaSyB3k-LBmggAj6AvI6W_WJ4K_5HkKbs19lc",
+    authDomain: "supertictactoe-e55f8.firebaseapp.com",
+    databaseURL: "https://supertictactoe-e55f8-default-rtdb.firebaseio.com",
+    projectId: "supertictactoe-e55f8",
+    storageBucket: "supertictactoe-e55f8.firebasestorage.app",
+    messagingSenderId: "178214219867",
+    appId: "1:178214219867:web:5d5177aa4af1e7738ecf7e"
+  };
+
+  let db = null;
+  let firebaseReady = false;
+  try {
+    if (window.firebase) {
+      firebase.initializeApp(firebaseConfig);
+      db = firebase.database();
+      firebaseReady = true;
+    }
+  } catch (e) { firebaseReady = false; }
+
+  let mode = "local";        // "local" | "online"
+  let onlineRole = null;     // "X" | "O" | null
+  let roomCode = null;
+  let roomRef = null;
+  let connected = false;     // both players present in the room
+
+  function genRoomCode() {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    let code = "";
+    for (let i = 0; i < 5; i++) code += chars[Math.floor(Math.random() * chars.length)];
+    return code;
+  }
+
+  function showOnlineError(msg) {
+    const el = document.getElementById("onlineError");
+    el.textContent = msg;
+    el.hidden = false;
+  }
+  function clearOnlineError() {
+    document.getElementById("onlineError").hidden = true;
+  }
+
+  function updateOnlinePanelView() {
+    const setupEl = document.getElementById("onlineSetup");
+    const statusEl = document.getElementById("onlineStatusPanel");
+    if (roomCode) {
+      setupEl.hidden = true;
+      statusEl.hidden = false;
+      document.getElementById("roomCodeDisplay").textContent = roomCode;
+      const statusText = document.getElementById("onlineStatusText");
+      if (!connected) {
+        statusText.textContent = "Share this code — waiting for your opponent to join…";
+      } else {
+        statusText.textContent = `Connected — you're playing as ${onlineRole}.`;
+      }
+    } else {
+      setupEl.hidden = false;
+      statusEl.hidden = true;
+    }
+  }
+
+  function leaveRoom() {
+    if (roomRef) {
+      try { roomRef.off(); } catch (e) { /* ignore */ }
+    }
+    roomRef = null;
+    roomCode = null;
+    onlineRole = null;
+    connected = false;
+    document.getElementById("joinCodeInput").value = "";
+    clearOnlineError();
+    updateOnlinePanelView();
+  }
+
+  function attachRoomListener() {
+    roomRef.on("value", (snap) => {
+      const data = snap.val();
+      if (!data) return;
+      state = data.state || freshState();
+      const players = data.players || {};
+      connected = !!(players.X && players.O);
+      updateOnlinePanelView();
+      render();
+    });
+  }
+
+  function createRoom() {
+    clearOnlineError();
+    if (!firebaseReady) { showOnlineError("Online play isn't available right now."); return; }
+    roomCode = genRoomCode();
+    onlineRole = "X";
+    roomRef = db.ref("rooms/" + roomCode);
+    roomRef.set({ state: freshState(), players: { X: true }, updatedAt: Date.now() })
+      .then(() => { attachRoomListener(); updateOnlinePanelView(); })
+      .catch(() => { showOnlineError("Couldn't create a room — try again."); roomCode = null; onlineRole = null; updateOnlinePanelView(); });
+  }
+
+  function joinRoom(codeRaw) {
+    clearOnlineError();
+    if (!firebaseReady) { showOnlineError("Online play isn't available right now."); return; }
+    const code = (codeRaw || "").trim().toUpperCase();
+    if (!code) { showOnlineError("Enter a room code first."); return; }
+    const ref = db.ref("rooms/" + code);
+    ref.once("value").then((snap) => {
+      const data = snap.val();
+      if (!data) { showOnlineError("That room code wasn't found."); return null; }
+      if (data.players && data.players.O) { showOnlineError("That room already has two players."); return null; }
+      return ref.child("players/O").set(true);
+    }).then((result) => {
+      if (result === null) return;
+      roomCode = code;
+      onlineRole = "O";
+      roomRef = ref;
+      attachRoomListener();
+      updateOnlinePanelView();
+    }).catch(() => showOnlineError("Couldn't join that room — try again."));
+  }
+
+  function setMode(next) {
+    mode = next;
+    document.getElementById("modeLocalBtn").classList.toggle("active", mode === "local");
+    document.getElementById("modeOnlineBtn").classList.toggle("active", mode === "online");
+    document.getElementById("onlinePanel").hidden = mode !== "online";
+    if (mode === "local") {
+      leaveRoom();
+      state = load() || freshState();
+    }
+    render();
+  }
+
+  document.getElementById("modeLocalBtn").addEventListener("click", () => setMode("local"));
+  document.getElementById("modeOnlineBtn").addEventListener("click", () => setMode("online"));
+  document.getElementById("createRoomBtn").addEventListener("click", createRoom);
+  document.getElementById("joinRoomBtn").addEventListener("click", () => {
+    joinRoom(document.getElementById("joinCodeInput").value);
+  });
+  document.getElementById("joinCodeInput").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") joinRoom(document.getElementById("joinCodeInput").value);
+  });
+  document.getElementById("leaveRoomBtn").addEventListener("click", leaveRoom);
+  // --------------------------------------------------------------------------
 
   const LINES = [
     [0,1,2],[3,4,5],[6,7,8],
@@ -394,6 +675,7 @@
 
   function playMove(boardIdx, cellIdx) {
     if (state.gameOver) return;
+    if (mode === "online" && (!connected || state.current !== onlineRole)) return;
     const board = state.boards[boardIdx];
     if (board.locked) return;
     if (board.cells[cellIdx] !== null) return;
@@ -443,7 +725,11 @@
       state.current = player === "X" ? "O" : "X";
     }
 
-    save();
+    if (mode === "online" && roomRef) {
+      roomRef.child("state").set(state).catch(() => { /* will retry on next move */ });
+    } else {
+      save();
+    }
     render();
   }
 
@@ -463,7 +749,8 @@
         const btn = document.createElement("button");
         btn.className = "cell" + (val ? " " + val.toLowerCase() : "");
         btn.textContent = val || "";
-        const disabled = state.gameOver || board.locked || val !== null ||
+        const onlineBlocked = mode === "online" && (!connected || state.current !== onlineRole);
+        const disabled = state.gameOver || board.locked || val !== null || onlineBlocked ||
           (state.activeBoard !== null && state.activeBoard !== bIdx);
         btn.disabled = disabled;
         btn.setAttribute("aria-label", `Board ${bIdx + 1}, cell ${cIdx + 1}${val ? ", " + val : ""}`);
@@ -539,12 +826,22 @@
       const boardHint = state.activeBoard === null
         ? "any open board"
         : `board ${state.activeBoard + 1}`;
-      statusEl.innerHTML = `<span class="mark ${p.toLowerCase()}">${p}</span> to move — play in ${boardHint}`;
+      if (mode === "online" && !connected) {
+        statusEl.innerHTML = `Waiting for your opponent to join…`;
+      } else if (mode === "online" && p !== onlineRole) {
+        statusEl.innerHTML = `<span class="mark ${p.toLowerCase()}">${p}</span> to move — waiting on your opponent`;
+      } else {
+        statusEl.innerHTML = `<span class="mark ${p.toLowerCase()}">${p}</span> to move — play in ${boardHint}`;
+      }
       banner.classList.remove("show");
     }
   }
 
   document.getElementById("resetBtn").addEventListener("click", () => {
+    if (mode === "online" && roomRef) {
+      roomRef.child("state").set(freshState()).catch(() => {});
+      return;
+    }
     state = freshState();
     save();
     render();
@@ -552,6 +849,7 @@
 
   const restored = load();
   state = restored || freshState();
+  updateOnlinePanelView();
   render();
 
   // Offline support: cache the page itself the first time it loads
