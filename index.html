@@ -509,6 +509,17 @@
     return code;
   }
 
+  // Firebase's Realtime Database silently drops any `null` value (it treats
+  // null as "delete this key"), which corrupts our boards' null-filled cell
+  // arrays. Storing the whole state as one JSON string sidesteps that.
+  function safeParse(json) {
+    try {
+      const parsed = JSON.parse(json);
+      if (parsed && Array.isArray(parsed.boards) && parsed.boards.length === 9) return parsed;
+    } catch (e) { /* fall through */ }
+    return freshState();
+  }
+
   function showOnlineError(msg) {
     const el = document.getElementById("onlineError");
     el.textContent = msg;
@@ -554,7 +565,7 @@
     roomRef.on("value", (snap) => {
       const data = snap.val();
       if (!data) return;
-      state = data.state || freshState();
+      state = data.state ? safeParse(data.state) : freshState();
       const players = data.players || {};
       connected = !!(players.X && players.O);
       updateOnlinePanelView();
@@ -568,7 +579,7 @@
     roomCode = genRoomCode();
     onlineRole = "X";
     roomRef = db.ref("rooms/" + roomCode);
-    roomRef.set({ state: freshState(), players: { X: true }, updatedAt: Date.now() })
+    roomRef.set({ state: JSON.stringify(freshState()), players: { X: true }, updatedAt: Date.now() })
       .then(() => { attachRoomListener(); updateOnlinePanelView(); })
       .catch(() => { showOnlineError("Couldn't create a room — try again."); roomCode = null; onlineRole = null; updateOnlinePanelView(); });
   }
@@ -615,7 +626,7 @@
   document.getElementById("joinCodeInput").addEventListener("keydown", (e) => {
     if (e.key === "Enter") joinRoom(document.getElementById("joinCodeInput").value);
   });
-  document.getElementById("leaveRoomBtn").addEventListener("click", leaveRoom);
+  document.getElementById("leaveRoomBtn").addEventListener("click", () => setMode("local"));
   // --------------------------------------------------------------------------
 
   const LINES = [
@@ -726,7 +737,7 @@
     }
 
     if (mode === "online" && roomRef) {
-      roomRef.child("state").set(state).catch(() => { /* will retry on next move */ });
+      roomRef.child("state").set(JSON.stringify(state)).catch(() => { /* will retry on next move */ });
     } else {
       save();
     }
@@ -839,7 +850,7 @@
 
   document.getElementById("resetBtn").addEventListener("click", () => {
     if (mode === "online" && roomRef) {
-      roomRef.child("state").set(freshState()).catch(() => {});
+      roomRef.child("state").set(JSON.stringify(freshState())).catch(() => {});
       return;
     }
     state = freshState();
