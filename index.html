@@ -372,6 +372,17 @@
   .lead-x { background: var(--x-color); }
   .lead-o { background: var(--o-color); }
 
+  .render-error {
+    grid-column: 1 / -1;
+    background: var(--panel);
+    color: var(--ink);
+    font-size: 13.5px;
+    line-height: 1.6;
+    padding: 20px;
+    text-align: center;
+    border-radius: 8px;
+  }
+
   .board-overlay {
     position: absolute;
     inset: 0;
@@ -748,6 +759,20 @@
     const metaBoard = document.getElementById("metaBoard");
     metaBoard.innerHTML = "";
 
+    try {
+      renderBoards(metaBoard);
+    } catch (e) {
+      metaBoard.innerHTML = "";
+      const errEl = document.createElement("div");
+      errEl.className = "render-error";
+      errEl.textContent = "Something went wrong showing the board. Try reloading the page — if you're on the home-screen icon, reopen it fresh (or force-quit and relaunch).";
+      metaBoard.appendChild(errEl);
+      return;
+    }
+    renderStatus();
+  }
+
+  function renderBoards(metaBoard) {
     state.boards.forEach((board, bIdx) => {
       const boardEl = document.createElement("div");
       boardEl.className = "board";
@@ -818,7 +843,9 @@
 
       metaBoard.appendChild(boardEl);
     });
+  }
 
+  function renderStatus() {
     const statusEl = document.getElementById("status");
     const banner = document.getElementById("endBanner");
 
@@ -875,7 +902,7 @@
         self.addEventListener("fetch", (event) => {
           if (event.request.method !== "GET") return;
           event.respondWith(
-            fetch(event.request)
+            fetch(event.request, { cache: "no-store" })
               .then((response) => {
                 const copy = response.clone();
                 caches.open(CACHE).then((cache) => cache.put(event.request, copy)).catch(() => {});
